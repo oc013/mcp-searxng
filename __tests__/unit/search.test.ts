@@ -2,7 +2,7 @@
 
 /**
  * Unit Tests: search.ts
- * 
+ *
  * Tests for SearXNG search functionality
  */
 
@@ -22,37 +22,37 @@ async function runTests() {
 
   await testFunction('Error handling for missing SEARXNG_URL', async () => {
     envManager.delete('SEARXNG_URL');
-    
+
     const mockServer = createMockServer();
-    
+
     try {
       await performWebSearch(mockServer as any, 'test query');
       assert.fail('Should have thrown configuration error');
     } catch (error: any) {
       assert.ok(error.message.includes('SEARXNG_URL not configured') || error.message.includes('Configuration'));
     }
-    
+
     envManager.restore();
   }, results);
 
   await testFunction('Error handling for invalid SEARXNG_URL format', async () => {
     envManager.set('SEARXNG_URL', 'not-a-valid-url');
-    
+
     const mockServer = createMockServer();
-    
+
     try {
       await performWebSearch(mockServer as any, 'test query');
       assert.fail('Should have thrown configuration error for invalid URL');
     } catch (error: any) {
       assert.ok(error.message.includes('Configuration Issues') || error.message.includes('invalid format'));
     }
-    
+
     envManager.restore();
   }, results);
 
   await testFunction('Parameter validation and URL construction', async () => {
     envManager.set('SEARXNG_URL', 'https://test-searx.example.com');
-    
+
     const mockServer = createMockServer();
     const { mockFetch, getCapturedUrl, getCapturedOptions } = createCapturingMockFetch();
 
@@ -62,7 +62,7 @@ async function runTests() {
     });
 
     try {
-      await performWebSearch(mockServer as any, 'test query', 2, 'day', 'en', 1);
+      await performWebSearch(mockServer as any, 'test query', 2, 'day', 'en', 1, ['google', ' bing ']);
     } catch (error: any) {
       // Expected to fail with mock error
     }
@@ -75,7 +75,82 @@ async function runTests() {
     assert.ok(url.searchParams.get('time_range') === 'day');
     assert.ok(url.searchParams.get('language') === 'en');
     assert.ok(url.searchParams.get('safesearch') === '1');
+    assert.ok(url.searchParams.get('engines') === 'google,bing');
     assert.ok(url.searchParams.get('format') === 'json');
+
+    fetchMocker.restore();
+    envManager.restore();
+  }, results);
+
+  await testFunction('Engines parameter accepts comma-separated strings', async () => {
+    envManager.set('SEARXNG_URL', 'https://test-searx.example.com');
+
+    const mockServer = createMockServer();
+    const { mockFetch, getCapturedUrl } = createCapturingMockFetch();
+
+    fetchMocker.mock(async (url, options) => {
+      await mockFetch(url, options);
+      throw new Error('MOCK_STOP');
+    });
+
+    try {
+      await performWebSearch(mockServer as any, 'test query', 1, undefined, 'all', undefined, 'google, bing , brave');
+    } catch {
+      // expected
+    }
+
+    const url = new URL(getCapturedUrl());
+    assert.equal(url.searchParams.get('engines'), 'google,bing,brave');
+
+    fetchMocker.restore();
+    envManager.restore();
+  }, results);
+
+  await testFunction('Default engines env var is applied when request omits engines', async () => {
+    envManager.set('SEARXNG_URL', 'https://test-searx.example.com');
+    envManager.set('SEARCH_DEFAULT_ENGINES', 'google, bing , brave');
+
+    const mockServer = createMockServer();
+    const { mockFetch, getCapturedUrl } = createCapturingMockFetch();
+
+    fetchMocker.mock(async (url, options) => {
+      await mockFetch(url, options);
+      throw new Error('MOCK_STOP');
+    });
+
+    try {
+      await performWebSearch(mockServer as any, 'test query');
+    } catch {
+      // expected
+    }
+
+    const url = new URL(getCapturedUrl());
+    assert.equal(url.searchParams.get('engines'), 'google,bing,brave');
+
+    fetchMocker.restore();
+    envManager.restore();
+  }, results);
+
+  await testFunction('Per-request engines override SEARCH_DEFAULT_ENGINES', async () => {
+    envManager.set('SEARXNG_URL', 'https://test-searx.example.com');
+    envManager.set('SEARCH_DEFAULT_ENGINES', 'google,bing');
+
+    const mockServer = createMockServer();
+    const { mockFetch, getCapturedUrl } = createCapturingMockFetch();
+
+    fetchMocker.mock(async (url, options) => {
+      await mockFetch(url, options);
+      throw new Error('MOCK_STOP');
+    });
+
+    try {
+      await performWebSearch(mockServer as any, 'test query', 1, undefined, 'all', undefined, ['duckduckgo']);
+    } catch {
+      // expected
+    }
+
+    const url = new URL(getCapturedUrl());
+    assert.equal(url.searchParams.get('engines'), 'duckduckgo');
 
     fetchMocker.restore();
     envManager.restore();
@@ -84,9 +159,9 @@ async function runTests() {
   await testFunction('URL construction with subpath', async () => {
     // Case 1: Subpath without trailing slash
     envManager.set('SEARXNG_URL', 'https://test-searx.example.com/subpath');
-    
+
     const mockServer = createMockServer();
-    
+
     // First run
     let capture = createCapturingMockFetch();
     fetchMocker.mock(async (url, options) => {
@@ -102,12 +177,12 @@ async function runTests() {
 
     let url = new URL(capture.getCapturedUrl());
     assert.ok(url.pathname.includes('/subpath/search'), `Expected path to contain /instance/search, got ${url.pathname}`);
-    
+
     fetchMocker.restore();
 
     // Case 2: Subpath with trailing slash
     envManager.set('SEARXNG_URL', 'https://test-searx.example.com/subpath/');
-    
+
     // Second run
     capture = createCapturingMockFetch();
     fetchMocker.mock(async (url, options) => {
@@ -132,7 +207,7 @@ async function runTests() {
     envManager.set('SEARXNG_URL', 'https://test-searx.example.com');
     envManager.set('AUTH_USERNAME', 'testuser');
     envManager.set('AUTH_PASSWORD', 'testpass');
-    
+
     const mockServer = createMockServer();
     const { mockFetch, getCapturedOptions } = createCapturingMockFetch();
 
@@ -160,10 +235,10 @@ async function runTests() {
 
   await testFunction('Server error handling with different status codes', async () => {
     envManager.set('SEARXNG_URL', 'https://test-searx.example.com');
-    
+
     const mockServer = createMockServer();
     const statusCodes = [404, 500, 502, 503];
-    
+
     for (const statusCode of statusCodes) {
       const mockFetch = createMockFetch({
         ok: false,
@@ -183,15 +258,15 @@ async function runTests() {
 
       fetchMocker.restore();
     }
-    
+
     envManager.restore();
   }, results);
 
   await testFunction('JSON parsing error handling', async () => {
     envManager.set('SEARXNG_URL', 'https://test-searx.example.com');
-    
+
     const mockServer = createMockServer();
-    
+
     fetchMocker.mock(async () => ({
       ok: true,
       json: async () => {
@@ -213,7 +288,7 @@ async function runTests() {
 
   await testFunction('Missing results data error handling', async () => {
     envManager.set('SEARXNG_URL', 'https://test-searx.example.com');
-    
+
     const mockServer = createMockServer();
     const mockFetch = createMockFetch({ json: { query: 'test' } });
 
@@ -232,7 +307,7 @@ async function runTests() {
 
   await testFunction('Empty results handling', async () => {
     envManager.set('SEARXNG_URL', 'https://test-searx.example.com');
-    
+
     const mockServer = createMockServer();
     const mockFetch = createMockFetch({ json: { results: [] } });
 
@@ -248,7 +323,7 @@ async function runTests() {
 
   await testFunction('Successful search with results formatting', async () => {
     envManager.set('SEARXNG_URL', 'https://test-searx.example.com');
-    
+
     const mockServer = createMockServer();
     const mockFetch = createMockFetch({
       json: {

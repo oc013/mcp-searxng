@@ -14,8 +14,14 @@ export function createConfigResource() {
     },
     environment: {
       ...(showFullConfig
-        ? { searxngUrl: process.env.SEARXNG_URL || "(not configured)" }
-        : { searxngUrlConfigured: !!process.env.SEARXNG_URL }),
+        ? {
+            searxngUrl: process.env.SEARXNG_URL || "(not configured)",
+            searchDefaultEngines: process.env.SEARCH_DEFAULT_ENGINES || "(not configured)"
+          }
+        : {
+            searxngUrlConfigured: !!process.env.SEARXNG_URL,
+            searchDefaultEnginesConfigured: !!process.env.SEARCH_DEFAULT_ENGINES
+          }),
       hasAuth: !!(process.env.AUTH_USERNAME && process.env.AUTH_PASSWORD),
       hasProxy: !!(process.env.HTTP_PROXY || process.env.HTTPS_PROXY || process.env.http_proxy || process.env.https_proxy),
       hasNoProxy: !!(process.env.NO_PROXY || process.env.no_proxy),
@@ -42,7 +48,7 @@ This is a Model Context Protocol (MCP) server that provides web search capabilit
 ## Available Tools
 
 ### 1. searxng_web_search
-Performs web searches using the configured SearXNG instance.
+Performs web searches using the configured SearXNG instance, with optional per-request engine selection.
 
 **Parameters:**
 - \`query\` (required): The search query string
@@ -50,6 +56,7 @@ Performs web searches using the configured SearXNG instance.
 - \`time_range\` (optional): Filter by time - "day", "month", or "year"
 - \`language\` (optional): Language code like "en", "fr", "de" (default: "all")
 - \`safesearch\` (optional): Safe search level - 0 (none), 1 (moderate), 2 (strict)
+- \`engines\` (optional): Comma-separated engine list or array of engine names, such as \`google,bing\` or \`[\"google\", \"bing\"]\`. If omitted, \`SEARCH_DEFAULT_ENGINES\` is used when configured.
 
 ### 2. web_url_read
 Reads and converts web page content to Markdown format.
@@ -64,6 +71,7 @@ Reads and converts web page content to Markdown format.
 
 ### Optional Environment Variables
 - \`AUTH_USERNAME\` & \`AUTH_PASSWORD\`: Basic authentication for SearXNG
+- \`SEARCH_DEFAULT_ENGINES\`: Default comma-separated engine list for \`searxng_web_search\` when the request omits \`engines\`
 - \`HTTP_PROXY\` / \`HTTPS_PROXY\`: Proxy server configuration
 - \`NO_PROXY\` / \`no_proxy\`: Comma-separated list of hosts to bypass proxy
 - \`MCP_HTTP_PORT\`: Enable HTTP transport on specified port
@@ -91,9 +99,22 @@ Tool: searxng_web_search
 Args: {"query": "latest AI developments", "time_range": "day"}
 \`\`\`
 
+### Search with specific upstream engines
+\`\`\`
+Tool: searxng_web_search
+Args: {"query": "latest AI developments", "engines": ["google", "bing"]}
+\`\`\`
+
+### Use server default engines
+\`\`\`
+Environment: SEARCH_DEFAULT_ENGINES=google,bing
+Tool: searxng_web_search
+Args: {"query": "latest AI developments"}
+\`\`\`
+
 ### Read a specific article
 \`\`\`
-Tool: web_url_read  
+Tool: web_url_read
 Args: {"url": "https://example.com/article"}
 \`\`\`
 

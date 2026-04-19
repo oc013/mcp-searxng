@@ -2,7 +2,7 @@
 
 /**
  * Unit Tests: types.ts
- * 
+ *
  * Tests for type guards and type definitions
  */
 
@@ -20,6 +20,8 @@ async function runTests() {
     assert.equal(isSearXNGWebSearchArgs({ query: 'test', language: 'en' }), true);
     assert.equal(isSearXNGWebSearchArgs({ query: 'test search' }), true);
     assert.equal(isSearXNGWebSearchArgs({ query: 'test', pageno: 1, time_range: 'day' }), true);
+    assert.equal(isSearXNGWebSearchArgs({ query: 'test', engines: 'google,bing' }), true);
+    assert.equal(isSearXNGWebSearchArgs({ query: 'test', engines: ['google', 'bing'] }), true);
   }, results);
 
   await testFunction('isSearXNGWebSearchArgs type guard - invalid cases', () => {
@@ -29,6 +31,7 @@ async function runTests() {
     assert.equal(isSearXNGWebSearchArgs('string'), false);
     assert.equal(isSearXNGWebSearchArgs(123), false);
     assert.equal(isSearXNGWebSearchArgs({}), false);
+    assert.equal(isSearXNGWebSearchArgs({ query: 'test', engines: 123 }), false);
   }, results);
 
   await testFunction('isWebUrlReadArgs type guard - basic valid cases', () => {

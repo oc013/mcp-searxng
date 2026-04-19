@@ -9,18 +9,34 @@ export interface SearXNGWeb {
   }>;
 }
 
-export function isSearXNGWebSearchArgs(args: unknown): args is {
+export interface SearXNGWebSearchArgs {
   query: string;
   pageno?: number;
   time_range?: string;
   language?: string;
   safesearch?: number;
-} {
+  engines?: string | string[];
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+export function isSearXNGWebSearchArgs(args: unknown): args is SearXNGWebSearchArgs {
+  if (
+    typeof args !== "object" ||
+    args === null ||
+    !("query" in args) ||
+    typeof (args as { query: unknown }).query !== "string"
+  ) {
+    return false;
+  }
+
+  const searchArgs = args as { engines?: unknown };
   return (
-    typeof args === "object" &&
-    args !== null &&
-    "query" in args &&
-    typeof (args as { query: string }).query === "string"
+    searchArgs.engines === undefined ||
+    typeof searchArgs.engines === "string" ||
+    isStringArray(searchArgs.engines)
   );
 }
 
@@ -28,7 +44,8 @@ export const WEB_SEARCH_TOOL: Tool = {
   name: "searxng_web_search",
   description:
     "Performs a web search using the SearXNG API, ideal for general queries, news, articles, and online content. " +
-    "Use this for broad information gathering, recent events, or when you need diverse web sources.",
+    "Use this for broad information gathering, recent events, or when you need diverse web sources. " +
+    "Optionally restrict a request to specific upstream SearXNG engines.",
   annotations: {
     readOnlyHint: true,
     openWorldHint: true,
@@ -63,6 +80,22 @@ export const WEB_SEARCH_TOOL: Tool = {
           "Safe search filter level (0: None, 1: Moderate, 2: Strict)",
         enum: [0, 1, 2],
         default: 0,
+      },
+      engines: {
+        description:
+          "Restrict results to specific upstream SearXNG engines. Accepts a comma-separated string like \"google,bing\" or an array like [\"google\", \"bing\"].",
+        oneOf: [
+          {
+            type: "string",
+          },
+          {
+            type: "array",
+            items: {
+              type: "string",
+            },
+            minItems: 1,
+          },
+        ],
       },
     },
     required: ["query"],

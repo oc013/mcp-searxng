@@ -2,7 +2,7 @@
 
 /**
  * Unit Tests: resources.ts
- * 
+ *
  * Tests for resource generation
  */
 
@@ -19,10 +19,10 @@ async function runTests() {
 
   await testFunction('createConfigResource returns valid JSON string', () => {
     const config = createConfigResource();
-    
+
     assert.ok(typeof config === 'string');
     assert.ok(config.length > 0);
-    
+
     // Should be valid JSON
     const parsed = JSON.parse(config);
     assert.ok(typeof parsed === 'object');
@@ -31,23 +31,24 @@ async function runTests() {
   await testFunction('createConfigResource includes environment variables', () => {
     const config = createConfigResource();
     const parsed = JSON.parse(config);
-    
+
     // Check that config includes environment information
     assert.ok(parsed.environment);
     assert.ok(parsed.environment.searxngUrl || parsed.environment.hasOwnProperty('searxngUrl'));
+    assert.ok(parsed.environment.searchDefaultEngines || parsed.environment.hasOwnProperty('searchDefaultEngines'));
     assert.ok(parsed.environment.currentLogLevel || parsed.environment.hasOwnProperty('currentLogLevel'));
   }, results);
 
   await testFunction('createHelpResource returns markdown string', () => {
     const help = createHelpResource();
-    
+
     assert.ok(typeof help === 'string');
     assert.ok(help.length > 0);
   }, results);
 
   await testFunction('createHelpResource includes usage information', () => {
     const help = createHelpResource();
-    
+
     // Should include information about tools
     assert.ok(help.includes('searxng') || help.includes('search') || help.includes('SearXNG'));
   }, results);
@@ -121,16 +122,28 @@ async function runTests() {
     envManager.restore();
   }, results);
 
+  await testFunction('createConfigResource exposes SEARCH_DEFAULT_ENGINES when configured', () => {
+    envManager.set('SEARCH_DEFAULT_ENGINES', 'google,bing');
+
+    const config = JSON.parse(createConfigResource());
+    assert.equal(config.environment.searchDefaultEngines, 'google,bing');
+
+    envManager.restore();
+  }, results);
+
   await testFunction('config resource redacts searxngUrl in hardened mode', () => {
     envManager.set('MCP_HTTP_HARDEN', 'true');
     envManager.set('MCP_HTTP_AUTH_TOKEN', 'secret-token');
     envManager.set('MCP_HTTP_ALLOWED_ORIGINS', 'https://app.example.com');
     envManager.set('SEARXNG_URL', 'https://search.internal.example');
+    envManager.set('SEARCH_DEFAULT_ENGINES', 'google,bing');
     envManager.delete('MCP_HTTP_EXPOSE_FULL_CONFIG');
 
     const config = JSON.parse(createConfigResource());
     assert.equal(config.environment.searxngUrlConfigured, true);
     assert.equal(config.environment.searxngUrl, undefined);
+    assert.equal(config.environment.searchDefaultEnginesConfigured, true);
+    assert.equal(config.environment.searchDefaultEngines, undefined);
 
     envManager.restore();
   }, results);
@@ -141,9 +154,11 @@ async function runTests() {
     envManager.set('MCP_HTTP_ALLOWED_ORIGINS', 'https://app.example.com');
     envManager.set('MCP_HTTP_EXPOSE_FULL_CONFIG', 'true');
     envManager.set('SEARXNG_URL', 'https://search.internal.example');
+    envManager.set('SEARCH_DEFAULT_ENGINES', 'google,bing');
 
     const config = JSON.parse(createConfigResource());
     assert.equal(config.environment.searxngUrl, 'https://search.internal.example');
+    assert.equal(config.environment.searchDefaultEngines, 'google,bing');
 
     envManager.restore();
   }, results);

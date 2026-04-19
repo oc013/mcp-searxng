@@ -36,6 +36,8 @@ Replace `YOUR_SEARXNG_INSTANCE_URL` with the URL of your SearXNG instance (e.g. 
 - **Pagination**: Control which page of results to retrieve.
 - **Time Filtering**: Filter results by time range (day, month, year).
 - **Language Selection**: Filter results by preferred language.
+- **Engine Selection**: Restrict a search to specific upstream SearXNG engines per request.
+- **Instance Defaults**: Set a server-wide default engine list with `SEARCH_DEFAULT_ENGINES` for requests that omit `engines`.
 - **Safe Search**: Control content filtering level for search results.
 
 ## How It Works
@@ -64,6 +66,7 @@ AI Assistant (e.g. Claude)
     - `time_range` (string, optional): Filter results by time range - one of: "day", "month", "year" (default: none)
     - `language` (string, optional): Language code for results (e.g., "en", "fr", "de") or "all" (default: "all")
     - `safesearch` (number, optional): Safe search filter level (0: None, 1: Moderate, 2: Strict) (default: instance setting)
+    - `engines` (string or string[], optional): Restrict the request to specific upstream engines, for example `google,bing` or `["google", "bing"]`. If omitted, `SEARCH_DEFAULT_ENGINES` is used when configured.
 
 - **web_url_read**
   - Read and convert the content from a URL to markdown with advanced content extraction options
@@ -114,12 +117,18 @@ docker pull isokoliuk/mcp-searxng:latest
     "searxng": {
       "command": "docker",
       "args": [
-        "run", "-i", "--rm",
-        "-e", "SEARXNG_URL",
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "SEARXNG_URL",
+        "-e",
+        "SEARCH_DEFAULT_ENGINES",
         "isokoliuk/mcp-searxng:latest"
       ],
       "env": {
-        "SEARXNG_URL": "YOUR_SEARXNG_INSTANCE_URL"
+        "SEARXNG_URL": "YOUR_SEARXNG_INSTANCE_URL",
+        "SEARCH_DEFAULT_ENGINES": "google,bing"
       }
     }
   }
@@ -150,6 +159,7 @@ services:
     stdin_open: true
     environment:
       - SEARXNG_URL=YOUR_SEARXNG_INSTANCE_URL
+      - SEARCH_DEFAULT_ENGINES=google,bing
       # Add optional variables as needed — see CONFIGURATION.md
 ```
 
@@ -201,6 +211,8 @@ curl http://localhost:3000/health
 ## Configuration
 
 Set `SEARXNG_URL` to your SearXNG instance URL. All other variables are optional.
+
+To apply a server-wide default upstream engine list, set `SEARCH_DEFAULT_ENGINES=google,bing`. A tool call can still override that default by passing its own `engines` argument.
 
 Full environment variable reference: [CONFIGURATION.md](CONFIGURATION.md)
 

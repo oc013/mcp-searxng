@@ -13,26 +13,47 @@ import {
   type ErrorContext
 } from "./error-handler.js";
 
+function normalizeSearchEngines(engines?: string | string[]): string | undefined {
+  if (engines === undefined) {
+    return undefined;
+  }
+
+  const engineList = (Array.isArray(engines) ? engines : engines.split(","))
+    .map((engine) => engine.trim())
+    .filter((engine) => engine.length > 0);
+
+  if (engineList.length === 0) {
+    return undefined;
+  }
+
+  return [...new Set(engineList)].join(",");
+}
+
 export async function performWebSearch(
   mcpServer: McpServer,
   query: string,
   pageno: number = 1,
   time_range?: string,
   language: string = "all",
-  safesearch?: number
+  safesearch?: number,
+  engines?: string | string[]
 ) {
   const startTime = Date.now();
-  
+  const configuredDefaultEngines = process.env.SEARCH_DEFAULT_ENGINES;
+  const requestedEngines = engines === undefined ? configuredDefaultEngines : engines;
+  const normalizedEngines = normalizeSearchEngines(requestedEngines);
+
   // Build detailed log message with all parameters
   const searchParams = [
     `page ${pageno}`,
     `lang: ${language}`,
     time_range ? `time: ${time_range}` : null,
-    safesearch ? `safesearch: ${safesearch}` : null
+    safesearch !== undefined ? `safesearch: ${safesearch}` : null,
+    normalizedEngines ? `engines: ${normalizedEngines}` : null
   ].filter(Boolean).join(", ");
-  
+
   logMessage(mcpServer, "info", `Starting web search: "${query}" (${searchParams})`);
-  
+
   const validationError = validateEnvironment();
   if (validationError) {
     logMessage(mcpServer, "error", "Configuration invalid");
@@ -61,6 +82,10 @@ export async function performWebSearch(
 
   if (safesearch !== undefined && [0, 1, 2].includes(safesearch)) {
     url.searchParams.set("safesearch", safesearch.toString());
+  }
+
+  if (normalizedEngines) {
+    url.searchParams.set("engines", normalizedEngines);
   }
 
   // Prepare request options with headers

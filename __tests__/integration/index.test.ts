@@ -2,13 +2,13 @@
 
 /**
  * Integration Tests: index.ts
- * 
+ *
  * Tests for main server integration and tool handlers
  */
 
 import { strict as assert } from 'node:assert';
-import { 
-  packageVersion, 
+import {
+  packageVersion,
   isWebUrlReadArgs,
   createMcpServer
 } from '../../src/index.js';
@@ -94,7 +94,7 @@ async function runTests() {
   await testFunction('Read resource handler - config resource', async () => {
     const configUri = "config://server-config";
     const configContent = createConfigResource();
-    
+
     const configResponse = {
       contents: [
         {
@@ -104,11 +104,11 @@ async function runTests() {
         }
       ]
     };
-    
+
     assert.equal(configResponse.contents[0].uri, configUri);
     assert.equal(configResponse.contents[0].mimeType, "application/json");
     assert.ok(typeof configResponse.contents[0].text === 'string');
-    
+
     // Verify it's valid JSON
     const parsed = JSON.parse(configResponse.contents[0].text);
     assert.ok(typeof parsed === 'object');
@@ -117,7 +117,7 @@ async function runTests() {
   await testFunction('Read resource handler - help resource', async () => {
     const helpUri = "help://usage-guide";
     const helpContent = createHelpResource();
-    
+
     const helpResponse = {
       contents: [
         {
@@ -127,7 +127,7 @@ async function runTests() {
         }
       ]
     };
-    
+
     assert.equal(helpResponse.contents[0].uri, helpUri);
     assert.equal(helpResponse.contents[0].mimeType, "text/markdown");
     assert.ok(typeof helpResponse.contents[0].text === 'string');
@@ -135,12 +135,12 @@ async function runTests() {
 
   await testFunction('Read resource handler - unknown resource error', async () => {
     const testUnknownResource = (uri: string) => {
-      if (uri !== "config://server-config" && 
+      if (uri !== "config://server-config" &&
           uri !== "help://usage-guide") {
         throw new Error(`Unknown resource: ${uri}`);
       }
     };
-    
+
     try {
       testUnknownResource("unknown://resource");
       assert.fail('Should have thrown error');
@@ -154,18 +154,20 @@ async function runTests() {
     // Valid cases
     assert.ok(isSearXNGWebSearchArgs({ query: 'test search', language: 'en' }));
     assert.ok(isSearXNGWebSearchArgs({ query: 'test', pageno: 1, time_range: 'day' }));
-    
+    assert.ok(isSearXNGWebSearchArgs({ query: 'test', engines: ['google', 'bing'] }));
+
     // Invalid cases
     assert.ok(!isSearXNGWebSearchArgs({ notQuery: 'invalid' }));
     assert.ok(!isSearXNGWebSearchArgs(null));
     assert.ok(!isSearXNGWebSearchArgs({}));
+    assert.ok(!isSearXNGWebSearchArgs({ query: 'test', engines: 123 }));
   }, results);
 
   await testFunction('Tool arguments validation - URL read tool', () => {
     // Valid cases with various pagination parameters
     assert.ok(isWebUrlReadArgs({ url: 'https://example.com' }));
     assert.ok(isWebUrlReadArgs({ url: 'https://example.com', maxLength: 100 }));
-    
+
     // Invalid cases
     assert.ok(!isWebUrlReadArgs({ url: 'https://example.com', startChar: -1 }));
     assert.ok(!isWebUrlReadArgs({ url: 'https://example.com', maxLength: 0 }));
