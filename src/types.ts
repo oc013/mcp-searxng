@@ -6,6 +6,8 @@ export interface SearXNGWeb {
     content: string;
     url: string;
     score: number;
+    engine?: string;
+    engines?: string[];
   }>;
 }
 

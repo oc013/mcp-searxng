@@ -206,6 +206,8 @@ MCP_HTTP_PORT=3000 SEARXNG_URL=http://localhost:8080 mcp-searxng
 curl http://localhost:3000/health
 ```
 
+If you run HTTP mode in Docker, publish the port with `ports:` when you need host access. `expose:` only makes it reachable to other containers on the same Docker network.
+
 </details>
 
 ## Configuration

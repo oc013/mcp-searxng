@@ -321,6 +321,24 @@ async function runTests() {
     envManager.restore();
   }, results);
 
+  await testFunction('Empty results include engine summary when engines are constrained', async () => {
+    envManager.set('SEARXNG_URL', 'https://test-searx.example.com');
+    envManager.set('SEARCH_DEFAULT_ENGINES', 'google,bing');
+
+    const mockServer = createMockServer();
+    const mockFetch = createMockFetch({ json: { results: [] } });
+
+    fetchMocker.mock(mockFetch);
+
+    const result = await performWebSearch(mockServer as any, 'test query');
+    assert.ok(typeof result === 'string');
+    assert.ok(result.includes('Engines: google,bing'));
+    assert.ok(result.includes('No results found'));
+
+    fetchMocker.restore();
+    envManager.restore();
+  }, results);
+
   await testFunction('Successful search with results formatting', async () => {
     envManager.set('SEARXNG_URL', 'https://test-searx.example.com');
 
@@ -332,13 +350,15 @@ async function runTests() {
             title: 'Test Result 1',
             content: 'This is test content 1',
             url: 'https://example.com/1',
-            score: 0.95
+            score: 0.95,
+            engine: 'google'
           },
           {
             title: 'Test Result 2',
             content: 'This is test content 2',
             url: 'https://example.com/2',
-            score: 0.87
+            score: 0.87,
+            engines: ['bing']
           }
         ]
       }
@@ -346,8 +366,10 @@ async function runTests() {
 
     fetchMocker.mock(mockFetch);
 
-    const result = await performWebSearch(mockServer as any, 'test query');
+    const result = await performWebSearch(mockServer as any, 'test query', 1, undefined, 'all', undefined, 'google,bing');
     assert.ok(typeof result === 'string');
+    assert.ok(result.includes('Engines: google,bing'));
+    assert.ok(result.includes('Observed Engines: bing,google'));
     assert.ok(result.includes('Test Result 1'));
     assert.ok(result.includes('Test Result 2'));
     assert.ok(result.includes('https://example.com/1'));

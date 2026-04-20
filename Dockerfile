@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY ./ /app
 
-RUN --mount=type=cache,target=/root/.npm npm run bootstrap
+RUN npm run bootstrap
 
 FROM node:lts-alpine AS release
 
@@ -18,6 +18,6 @@ COPY --from=builder /app/package-lock.json /app/package-lock.json
 
 ENV NODE_ENV=production
 
-RUN npm ci --ignore-scripts --omit=dev && npm uninstall -g npm
+RUN npm ci --ignore-scripts --omit=dev --no-audit --no-fund
 
 ENTRYPOINT ["node", "dist/index.js"]

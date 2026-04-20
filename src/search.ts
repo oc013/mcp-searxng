@@ -29,6 +29,24 @@ function normalizeSearchEngines(engines?: string | string[]): string | undefined
   return [...new Set(engineList)].join(",");
 }
 
+function getObservedSearchEngines(
+  results: Array<{ engine?: string; engines?: string[] }>
+): string[] {
+  const observedEngines = new Set<string>();
+
+  for (const result of results) {
+    if (result.engine) {
+      observedEngines.add(result.engine);
+    }
+
+    for (const engine of result.engines || []) {
+      observedEngines.add(engine);
+    }
+  }
+
+  return [...observedEngines].sort();
+}
+
 export async function performWebSearch(
   mcpServer: McpServer,
   query: string,
@@ -178,17 +196,40 @@ export async function performWebSearch(
     content: result.content || "",
     url: result.url || "",
     score: result.score || 0,
+    engine: result.engine || undefined,
+    engines: Array.isArray(result.engines)
+      ? result.engines.filter((engine) => typeof engine === "string" && engine.length > 0)
+      : [],
   }));
 
   if (results.length === 0) {
     logMessage(mcpServer, "info", `No results found for query: "${query}"`);
-    return createNoResultsMessage(query);
+    const noResultsMessage = createNoResultsMessage(query);
+
+    if (!normalizedEngines) {
+      return noResultsMessage;
+    }
+
+    return `Engines: ${normalizedEngines}\n\n${noResultsMessage}`;
   }
 
   const duration = Date.now() - startTime;
   logMessage(mcpServer, "info", `Search completed: "${query}" (${searchParams}) - ${results.length} results in ${duration}ms`);
 
-  return results
+  const formattedResults = results
     .map((r) => `Title: ${r.title}\nDescription: ${r.content}\nURL: ${r.url}\nRelevance Score: ${r.score.toFixed(3)}`)
     .join("\n\n");
+
+  if (!normalizedEngines) {
+    return formattedResults;
+  }
+
+  const observedEngines = getObservedSearchEngines(results);
+  const responseLines = [`Engines: ${normalizedEngines}`];
+
+  if (observedEngines.length > 0) {
+    responseLines.push(`Observed Engines: ${observedEngines.join(",")}`);
+  }
+
+  return `${responseLines.join("\n")}\n\n${formattedResults}`;
 }

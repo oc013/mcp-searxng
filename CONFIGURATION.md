@@ -52,6 +52,8 @@ By default the server communicates over STDIO. Set `MCP_HTTP_PORT` to enable HTT
 - `POST/GET/DELETE /mcp` — MCP protocol
 - `GET /health` — health check
 
+If you run HTTP mode in Docker, publish the port with `ports:` when you need host access. `expose:` only makes it reachable to other containers on the same Docker network.
+
 ## Hardened HTTP Mode
 
 Opt-in security layer for when you expose the HTTP transport on a network. Default HTTP behavior is unchanged — hardening must be explicitly enabled with `MCP_HTTP_HARDEN=true`.
