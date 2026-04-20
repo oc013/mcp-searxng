@@ -2,7 +2,7 @@
 
 /**
  * Unit Tests: url-reader.ts
- * 
+ *
  * Tests for URL fetching and markdown conversion
  */
 
@@ -18,12 +18,44 @@ const results = createTestResults();
 const fetchMocker = new FetchMocker();
 const envManager = new EnvManager();
 
+function createSimplePdfBuffer(text: string): ArrayBuffer {
+  const escapedText = text
+    .replace(/\\/g, '\\\\')
+    .replace(/\(/g, '\\(')
+    .replace(/\)/g, '\\)');
+  const contentStream = `BT\n/F1 24 Tf\n72 100 Td\n(${escapedText}) Tj\nET`;
+  const objects = [
+    '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n',
+    '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n',
+    '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 144] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n',
+    `4 0 obj\n<< /Length ${contentStream.length} >>\nstream\n${contentStream}\nendstream\nendobj\n`,
+    '5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n'
+  ];
+
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  for (const object of objects) {
+    offsets.push(pdf.length);
+    pdf += object;
+  }
+
+  const startXref = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n`;
+  pdf += '0000000000 65535 f \n';
+  for (let index = 1; index <= objects.length; index++) {
+    pdf += `${offsets[index].toString().padStart(10, '0')} 00000 n \n`;
+  }
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${startXref}\n%%EOF`;
+
+  return new TextEncoder().encode(pdf).buffer;
+}
+
 async function runTests() {
   console.log('🧪 Testing: url-reader.ts\n');
 
   await testFunction('Error handling for invalid URL', async () => {
     const mockServer = createMockServer();
-    
+
     try {
       await fetchAndConvertToMarkdown(mockServer as any, 'not-a-valid-url');
       assert.fail('Should have thrown URL format error');
@@ -58,7 +90,7 @@ async function runTests() {
     for (const networkError of networkErrors) {
       const error = new Error(networkError.message);
       (error as any).code = networkError.code;
-      
+
       fetchMocker.mock(createMockFetch({ throwError: error }));
 
       try {
@@ -97,7 +129,7 @@ async function runTests() {
 
   await testFunction('Timeout handling', async () => {
     const mockServer = createMockServer();
-    
+
     fetchMocker.mock(createAbortableMockFetch(50));
 
     try {
@@ -112,7 +144,7 @@ async function runTests() {
 
   await testFunction('Empty content handling', async () => {
     const mockServer = createMockServer();
-    
+
     // Test empty HTML content
     fetchMocker.mock(createMockFetch({ body: '' }));
 
@@ -128,7 +160,7 @@ async function runTests() {
 
   await testFunction('Whitespace-only content handling', async () => {
     const mockServer = createMockServer();
-    
+
     fetchMocker.mock(createMockFetch({ body: '   \n\t   ' }));
 
     try {
@@ -144,7 +176,7 @@ async function runTests() {
   await testFunction('Successful HTML to Markdown conversion', async () => {
     const mockServer = createMockServer();
     urlCache.clear();
-    
+
     const testHtml = `
       <html>
         <head><title>Test Page</title></head>
@@ -160,13 +192,62 @@ async function runTests() {
       </html>
     `;
 
-    fetchMocker.mock(createMockFetch({ body: testHtml }));
+    fetchMocker.mock(createMockFetch({ body: testHtml, headers: { 'content-type': 'text/html; charset=utf-8' } }));
 
     const result = await fetchAndConvertToMarkdown(mockServer as any, 'https://example.com');
     assert.ok(typeof result === 'string');
     assert.ok(result.length > 0);
     // Check for markdown conversion
     assert.ok(result.includes('Main Title') || result.includes('#'));
+
+    fetchMocker.restore();
+  }, results);
+
+  await testFunction('Plain text content is returned without HTML conversion', async () => {
+    const mockServer = createMockServer();
+    urlCache.clear();
+
+    fetchMocker.mock(createMockFetch({
+      body: 'Line 1\nLine 2\nLine 3',
+      headers: { 'content-type': 'text/plain; charset=utf-8' }
+    }));
+
+    const result = await fetchAndConvertToMarkdown(mockServer as any, 'https://example.com/notes.txt');
+    assert.ok(result.includes('Line 1'));
+    assert.ok(result.includes('Line 2'));
+    assert.ok(!result.includes('# '));
+
+    fetchMocker.restore();
+  }, results);
+
+  await testFunction('PDF content is extracted to readable text', async () => {
+    const mockServer = createMockServer();
+    urlCache.clear();
+
+    fetchMocker.mock(createMockFetch({
+      headers: { 'content-type': 'application/pdf' },
+      arrayBuffer: createSimplePdfBuffer('Hello PDF World')
+    }));
+
+    const result = await fetchAndConvertToMarkdown(mockServer as any, 'https://example.com/test.pdf');
+    assert.ok(result.includes('Hello PDF World'), `Expected extracted PDF text, got: ${result}`);
+
+    fetchMocker.restore();
+  }, results);
+
+  await testFunction('Unsupported binary content returns a warning instead of binary output', async () => {
+    const mockServer = createMockServer();
+    urlCache.clear();
+
+    fetchMocker.mock(createMockFetch({
+      headers: { 'content-type': 'image/png' },
+      body: 'PNGDATA'
+    }));
+
+    const result = await fetchAndConvertToMarkdown(mockServer as any, 'https://example.com/test.png');
+    assert.ok(result.includes('Content Warning'));
+    assert.ok(result.includes('image/png'));
+    assert.ok(result.includes('Cannot serve'));
 
     fetchMocker.restore();
   }, results);
@@ -242,7 +323,7 @@ async function runTests() {
     urlCache.clear();
 
     envManager.set('HTTPS_PROXY', 'https://proxy.example.com:8080');
-    
+
     let capturedOptions: RequestInit | undefined;
     fetchMocker.mock(async (url: string | URL | Request, options?: RequestInit) => {
       capturedOptions = options;

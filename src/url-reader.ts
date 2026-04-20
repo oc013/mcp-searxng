@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { isIP } from "node:net";
 import { NodeHtmlMarkdown } from "node-html-markdown";
+import { PDFParse } from "pdf-parse";
 import { createProxyAgent, createDefaultAgent, ProxyType } from "./proxy.js";
 import { logMessage } from "./logging.js";
 import { urlCache } from "./cache.js";
@@ -24,6 +25,66 @@ interface PaginationOptions {
   section?: string;
   paragraphRange?: string;
   readHeadings?: boolean;
+}
+
+const HTML_CONTENT_TYPES = new Set(["text/html", "application/xhtml+xml"]);
+const TEXT_CONTENT_TYPES = new Set([
+  "application/json",
+  "application/ld+json",
+  "application/xml",
+  "application/rss+xml",
+  "application/atom+xml",
+  "application/javascript",
+  "application/x-javascript",
+  "application/ecmascript",
+  "application/x-sh",
+  "application/x-yaml",
+  "application/yaml",
+]);
+
+function normalizeContentType(contentTypeHeader: string | null | undefined): string {
+  return (contentTypeHeader || "").split(";", 1)[0].trim().toLowerCase();
+}
+
+function isHtmlContentType(contentType: string): boolean {
+  return HTML_CONTENT_TYPES.has(contentType);
+}
+
+function isTextContentType(contentType: string): boolean {
+  return contentType.startsWith("text/") || TEXT_CONTENT_TYPES.has(contentType);
+}
+
+function isPdfResource(contentType: string, url: URL): boolean {
+  return contentType === "application/pdf" || url.pathname.toLowerCase().endsWith(".pdf");
+}
+
+function looksLikeHtml(content: string): boolean {
+  const trimmed = content.trim();
+  if (!trimmed.startsWith("<")) {
+    return false;
+  }
+
+  return /^(<!doctype\s+html|<html|<head|<body|<article|<main|<section|<div|<p|<h1|<h2|<h3)/i.test(trimmed);
+}
+
+function createUnsupportedContentWarning(url: string, contentType: string): string {
+  const contentLabel = contentType || "this binary resource";
+  return `📄 Content Warning: Cannot serve ${contentLabel} as Markdown (${url}). Supported readable types are HTML, plain text, and PDF.`;
+}
+
+function createPdfExtractionWarning(url: string): string {
+  return `📄 Content Warning: PDF fetched but no extractable text was found (${url}).`;
+}
+
+async function extractPdfText(pdfBuffer: ArrayBuffer): Promise<string> {
+  const parser = new PDFParse({ data: new Uint8Array(pdfBuffer) });
+
+  try {
+    const textResult = await parser.getText();
+    return textResult.text.trim();
+  } finally {
+    await parser.destroy();
+  }
 }
 
 function isPrivateHostname(hostname: string): boolean {
@@ -213,7 +274,7 @@ export async function fetchAndConvertToMarkdown(
     logMessage(mcpServer, "info", `Processed cached URL: ${url} (${result.length} chars in ${duration}ms)`);
     return result;
   }
-  
+
   // Validate URL format
   let parsedUrl: URL;
   try {
@@ -276,10 +337,49 @@ export async function fetchAndConvertToMarkdown(
       throw createServerError(response.status, response.statusText, responseBody, context);
     }
 
-    // Retrieve HTML content
-    let htmlContent: string;
+    const contentType = normalizeContentType(response.headers?.get?.('content-type'));
+
+    if (isPdfResource(contentType, parsedUrl)) {
+      let pdfBuffer: ArrayBuffer;
+      try {
+        pdfBuffer = await response.arrayBuffer();
+      } catch (error: any) {
+        throw createContentError(
+          `Failed to read PDF content: ${error.message || 'Unknown error reading content'}`,
+          url
+        );
+      }
+
+      let pdfText: string;
+      try {
+        pdfText = await extractPdfText(pdfBuffer);
+      } catch (error: any) {
+        logMessage(mcpServer, "warning", `PDF text extraction failed for ${url}: ${error.message || String(error)}`);
+        return createPdfExtractionWarning(url);
+      }
+
+      if (!pdfText) {
+        logMessage(mcpServer, "warning", `PDF contained no extractable text: ${url}`);
+        return createPdfExtractionWarning(url);
+      }
+
+      urlCache.set(url, "[pdf]", pdfText);
+
+      const result = applyPaginationOptions(pdfText, paginationOptions);
+      const duration = Date.now() - startTime;
+      logMessage(mcpServer, "info", `Successfully fetched and extracted PDF text: ${url} (${result.length} chars in ${duration}ms)`);
+      return result;
+    }
+
+    if (contentType && !isHtmlContentType(contentType) && !isTextContentType(contentType)) {
+      logMessage(mcpServer, "warning", `Unsupported non-text content type for URL read: ${url} (${contentType})`);
+      return createUnsupportedContentWarning(url, contentType);
+    }
+
+    // Retrieve text or HTML content
+    let textContent: string;
     try {
-      htmlContent = await response.text();
+      textContent = await response.text();
     } catch (error: any) {
       throw createContentError(
         `Failed to read website content: ${error.message || 'Unknown error reading content'}`,
@@ -287,26 +387,29 @@ export async function fetchAndConvertToMarkdown(
       );
     }
 
-    if (!htmlContent || htmlContent.trim().length === 0) {
+    if (!textContent || textContent.trim().length === 0) {
       throw createContentError("Website returned empty content.", url);
     }
 
-    // Convert HTML to Markdown
     let markdownContent: string;
-    try {
-      markdownContent = NodeHtmlMarkdown.translate(htmlContent);
-    } catch (error: any) {
-      throw createConversionError(error, url, htmlContent);
+    if (isHtmlContentType(contentType) || (!contentType && looksLikeHtml(textContent))) {
+      try {
+        markdownContent = NodeHtmlMarkdown.translate(textContent);
+      } catch (error: any) {
+        throw createConversionError(error, url, textContent);
+      }
+    } else {
+      markdownContent = textContent;
     }
 
     if (!markdownContent || markdownContent.trim().length === 0) {
       logMessage(mcpServer, "warning", `Empty content after conversion: ${url}`);
       // DON'T cache empty/failed conversions - return warning directly
-      return createEmptyContentWarning(url, htmlContent.length, htmlContent);
+      return createEmptyContentWarning(url, textContent.length, textContent);
     }
 
     // Only cache successful markdown conversion
-    urlCache.set(url, htmlContent, markdownContent);
+    urlCache.set(url, textContent, markdownContent);
 
     // Apply pagination options
     const result = applyPaginationOptions(markdownContent, paginationOptions);
@@ -324,7 +427,7 @@ export async function fetchAndConvertToMarkdown(
       logMessage(mcpServer, "error", `Error fetching URL: ${url} - ${error.message}`);
       throw error;
     }
-    
+
     // Catch any unexpected errors
     logMessage(mcpServer, "error", `Unexpected error fetching URL: ${url}`, error);
     const context: ErrorContext = { url };

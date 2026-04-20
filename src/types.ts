@@ -107,8 +107,8 @@ export const WEB_SEARCH_TOOL: Tool = {
 export const READ_URL_TOOL: Tool = {
   name: "web_url_read",
   description:
-    "Read the content from an URL. " +
-    "Use this for further information retrieving to understand the content of each URL.",
+    "Read content from a URL. " +
+    "Converts HTML to Markdown, returns text-like resources directly, extracts text from PDFs when possible, and warns for unsupported binary resources.",
   annotations: {
     readOnlyHint: true,
     openWorldHint: true,

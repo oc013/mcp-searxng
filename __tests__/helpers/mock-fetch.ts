@@ -1,6 +1,6 @@
 /**
  * Mock Fetch Helper
- * 
+ *
  * Utilities for mocking fetch API in tests
  */
 
@@ -10,6 +10,8 @@ export type FetchMockOptions = {
   ok?: boolean;
   body?: string;
   json?: any;
+  headers?: Record<string, string>;
+  arrayBuffer?: ArrayBuffer | Uint8Array;
   throwError?: Error;
 };
 
@@ -23,6 +25,8 @@ export function createMockFetch(options: FetchMockOptions = {}) {
     ok = true,
     body = '',
     json = null,
+    headers = {},
+    arrayBuffer = null,
     throwError = null
   } = options;
 
@@ -35,7 +39,17 @@ export function createMockFetch(options: FetchMockOptions = {}) {
       ok,
       status,
       statusText,
+      headers: new Headers(headers),
       text: async () => body,
+      arrayBuffer: async () => {
+        if (arrayBuffer instanceof Uint8Array) {
+          return arrayBuffer.buffer.slice(arrayBuffer.byteOffset, arrayBuffer.byteOffset + arrayBuffer.byteLength);
+        }
+        if (arrayBuffer) {
+          return arrayBuffer;
+        }
+        return new TextEncoder().encode(body).buffer;
+      },
       json: async () => {
         if (json !== null) {
           return json;
@@ -59,12 +73,14 @@ export function createCapturingMockFetch() {
   const mockFetch = async (url: string | URL | Request, options?: RequestInit): Promise<Response> => {
     capturedUrl = url.toString();
     capturedOptions = options;
-    
+
     return {
       ok: true,
       status: 200,
       statusText: 'OK',
+      headers: new Headers({ 'content-type': 'text/html; charset=utf-8' }),
       text: async () => '<html><body>Test</body></html>',
+      arrayBuffer: async () => new TextEncoder().encode('<html><body>Test</body></html>').buffer,
       json: async () => ({ results: [] })
     } as Response;
   };

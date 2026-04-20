@@ -69,7 +69,8 @@ AI Assistant (e.g. Claude)
     - `engines` (string or string[], optional): Restrict the request to specific upstream engines, for example `google,bing` or `["google", "bing"]`. If omitted, `SEARCH_DEFAULT_ENGINES` is used when configured.
 
 - **web_url_read**
-  - Read and convert the content from a URL to markdown with advanced content extraction options
+  - Read content from a URL with advanced extraction options
+  - Converts HTML to markdown, returns text-like content directly, extracts text from PDFs when possible, and warns for unsupported binary resources
   - Inputs:
     - `url` (string): The URL to fetch and process
     - `startChar` (number, optional): Starting character position for content extraction (default: 0)

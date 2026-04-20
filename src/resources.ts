@@ -59,10 +59,16 @@ Performs web searches using the configured SearXNG instance, with optional per-r
 - \`engines\` (optional): Comma-separated engine list or array of engine names, such as \`google,bing\` or \`[\"google\", \"bing\"]\`. If omitted, \`SEARCH_DEFAULT_ENGINES\` is used when configured.
 
 ### 2. web_url_read
-Reads and converts web page content to Markdown format.
+Reads web content and returns it in a readable text format.
 
 **Parameters:**
 - \`url\` (required): The URL to fetch and convert
+
+**Behavior:**
+- HTML pages are converted to Markdown
+- Plain text resources are returned directly
+- PDFs are parsed for extractable text when possible
+- Unsupported binary resources return a warning instead of raw bytes
 
 ## Configuration
 
