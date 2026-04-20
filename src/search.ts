@@ -29,22 +29,13 @@ function normalizeSearchEngines(engines?: string | string[]): string | undefined
   return [...new Set(engineList)].join(",");
 }
 
-function getObservedSearchEngines(
-  results: Array<{ engine?: string; engines?: string[] }>
-): string[] {
-  const observedEngines = new Set<string>();
+function getResultSearchEngines(result: { engine?: string; engines?: string[] }): string[] {
+  const engineNames = [
+    ...(result.engine ? [result.engine] : []),
+    ...(result.engines || []),
+  ];
 
-  for (const result of results) {
-    if (result.engine) {
-      observedEngines.add(result.engine);
-    }
-
-    for (const engine of result.engines || []) {
-      observedEngines.add(engine);
-    }
-  }
-
-  return [...observedEngines].sort();
+  return [...new Set(engineNames)];
 }
 
 export async function performWebSearch(
@@ -196,10 +187,12 @@ export async function performWebSearch(
     content: result.content || "",
     url: result.url || "",
     score: result.score || 0,
-    engine: result.engine || undefined,
-    engines: Array.isArray(result.engines)
-      ? result.engines.filter((engine) => typeof engine === "string" && engine.length > 0)
-      : [],
+    engines: getResultSearchEngines({
+      engine: result.engine || undefined,
+      engines: Array.isArray(result.engines)
+        ? result.engines.filter((engine) => typeof engine === "string" && engine.length > 0)
+        : [],
+    }),
   }));
 
   if (results.length === 0) {
@@ -210,26 +203,28 @@ export async function performWebSearch(
       return noResultsMessage;
     }
 
-    return `Engines: ${normalizedEngines}\n\n${noResultsMessage}`;
+    return `Requested Engines: ${normalizedEngines}\n\n${noResultsMessage}`;
   }
 
   const duration = Date.now() - startTime;
   logMessage(mcpServer, "info", `Search completed: "${query}" (${searchParams}) - ${results.length} results in ${duration}ms`);
 
   const formattedResults = results
-    .map((r) => `Title: ${r.title}\nDescription: ${r.content}\nURL: ${r.url}\nRelevance Score: ${r.score.toFixed(3)}`)
+    .map((r) => {
+      const resultLines = [
+        `Title: ${r.title}`,
+        `Description: ${r.content}`,
+        `URL: ${r.url}`,
+        `Relevance Score: ${r.score.toFixed(3)}`,
+      ];
+
+      if (r.engines.length > 0) {
+        resultLines.push(`Source Engines: ${r.engines.join(",")}`);
+      }
+
+      return resultLines.join("\n");
+    })
     .join("\n\n");
 
-  if (!normalizedEngines) {
-    return formattedResults;
-  }
-
-  const observedEngines = getObservedSearchEngines(results);
-  const responseLines = [`Engines: ${normalizedEngines}`];
-
-  if (observedEngines.length > 0) {
-    responseLines.push(`Observed Engines: ${observedEngines.join(",")}`);
-  }
-
-  return `${responseLines.join("\n")}\n\n${formattedResults}`;
+  return formattedResults;
 }

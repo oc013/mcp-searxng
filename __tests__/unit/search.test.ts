@@ -332,7 +332,7 @@ async function runTests() {
 
     const result = await performWebSearch(mockServer as any, 'test query');
     assert.ok(typeof result === 'string');
-    assert.ok(result.includes('Engines: google,bing'));
+    assert.ok(result.includes('Requested Engines: google,bing'));
     assert.ok(result.includes('No results found'));
 
     fetchMocker.restore();
@@ -368,12 +368,12 @@ async function runTests() {
 
     const result = await performWebSearch(mockServer as any, 'test query', 1, undefined, 'all', undefined, 'google,bing');
     assert.ok(typeof result === 'string');
-    assert.ok(result.includes('Engines: google,bing'));
-    assert.ok(result.includes('Observed Engines: bing,google'));
     assert.ok(result.includes('Test Result 1'));
     assert.ok(result.includes('Test Result 2'));
     assert.ok(result.includes('https://example.com/1'));
     assert.ok(result.includes('https://example.com/2'));
+    assert.ok(result.includes('Source Engines: google'));
+    assert.ok(result.includes('Source Engines: bing'));
 
     fetchMocker.restore();
     envManager.restore();
